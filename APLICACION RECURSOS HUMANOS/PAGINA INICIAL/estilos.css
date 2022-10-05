@@ -1,0 +1,60 @@
+*{
+    margin: 0%;
+    padding: 0%;
+}
+
+
+h1 { 
+    text-align: center;
+    background: yellowgreen;
+}
+
+div {
+    background: rgba(128, 255, 0, 0.377);
+    margin: auto;
+}
+
+.articulo1 {
+    text-align: center;
+    
+   }
+
+   .articulo2 {
+    text-align: right;
+   }
+
+   .articulo3 {
+    text-align: left;
+   }
+
+   .articulo4 {
+    text-align: center;
+   }
+   
+   .articulo5 {
+    text-align: center;
+   }
+   
+h3 {
+    text-align: center;
+}
+
+p {
+    text-align: center;
+}
+
+li {
+    list-style-type: none;
+    background-color:rgba(0, 217, 255, 0.582);
+		box-shadow: 25px 25px 20px black;
+    margin: 20px;
+margin-right: 85%;
+
+}
+
+footer {
+    box-shadow: 5px 5px 5px black;
+    background-color: saddlebrown;
+    text-align: center;
+    display: contents black;
+}

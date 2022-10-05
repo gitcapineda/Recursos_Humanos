@@ -1,0 +1,77 @@
+lib>
+
+=item C<merge>
+
+=item C<modules>
+
+=item C<parse>
+
+=item C<plugins>
+
+=item C<quiet>
+
+=item C<really_quiet>
+
+=item C<recurse>
+
+=item C<rules>
+
+=item C<show_count>
+
+=item C<show_help>
+
+=item C<show_man>
+
+=item C<show_version>
+
+=item C<shuffle>
+
+=item C<state>
+
+=item C<state_class>
+
+=item C<taint_fail>
+
+=item C<taint_warn>
+
+=item C<test_args>
+
+=item C<timer>
+
+=item C<verbose>
+
+=item C<warnings_fail>
+
+=item C<warnings_warn>
+
+=item C<tapversion>
+
+=item C<trap>
+
+=back
+
+=head1 PLUGINS
+
+C<App::Prove> provides support for 3rd-party plugins.  These are currently
+loaded at run-time, I<after> arguments have been parsed (so you can not
+change the way arguments are processed, sorry), typically with the
+C<< -PI<plugin> >> switch, eg:
+
+  prove -PMyPlugin
+
+This will search for a module named C<App::Prove::Plugin::MyPlugin>, or failing
+that, C<MyPlugin>.  If the plugin can't be found, C<prove> will complain & exit.
+
+You can pass an argument to your plugin by appending an C<=> after the plugin
+name, eg C<-PMyPlugin=foo>.  You can pass multiple arguments using commas:
+
+  prove -PMyPlugin=foo,bar,baz
+
+These are passed in to your plugin's C<load()> class method (if it has one),
+along with a reference to the C<App::Prove> object that is invoking your plugin:
+
+  sub load {
+      my ($class, $p) = @_;
+
+      my @args = @{ $p->{args} };
+    

@@ -1,0 +1,28 @@
+h1{
+  text-align: center;
+  background-color: blue;
+}
+*{
+  margin: 0%;
+  padding: 0%;
+}
+
+
+h1 { 
+  text-align: center;
+  background: yellowgreen;
+}
+
+div {
+  background: rgba(128, 255, 0, 0.377);
+  margin: auto;
+}
+
+li {
+  list-style-type: none;
+  background-color:rgba(0, 217, 255, 0.582);
+  box-shadow: 25px 25px 20px black;
+  margin: 20px;
+margin-right: 85%;
+
+}

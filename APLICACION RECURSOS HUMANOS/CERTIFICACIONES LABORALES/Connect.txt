@@ -1,0 +1,19 @@
+public class Conexion {
+
+public Conexion() {
+
+}
+
+public Conexion getConexion(){
+Connection = null;
+
+try {
+     Clas.forName ("com.mysql.jdbc.Driver").newInstance();
+	   con = DriverManager.getConnection("jdbc:mysql://localhost:3310/recursoshumanos","root","");
+	   }catch (Exception e) {
+	   }
+	   
+	   return con;
+	   }
+	   
+	   }

@@ -1,0 +1,297 @@
+ often works
+like a I<thread yield>.  See also
+L<C<Time::HiRes::sleep()>|/sleep ( $floating_seconds )>,
+L<C<Time::HiRes::usleep()>|/usleep ( $useconds )>, and
+L<C<Time::HiRes::nanosleep()>|/nanosleep ( $nanoseconds )>.
+
+Do not expect clock_nanosleep() to be exact down to one nanosecond.
+Getting even accuracy of one thousand nanoseconds is good.
+
+=item clock()
+
+Return as seconds the I<process time> (user + system time) spent by
+the process since the first call to clock() (the definition is B<not>
+"since the start of the process", though if you are lucky these times
+may be quite close to each other, depending on the system).  What this
+means is that you probably need to store the result of your first call
+to clock(), and subtract that value from the following results of clock().
+
+The time returned also includes the process times of the terminated
+child processes for which wait() has been executed.  This value is
+somewhat like the second value returned by the times() of core Perl,
+but not necessarily identical.  Note that due to backward
+compatibility limitations the returned value may wrap around at about
+2147 seconds or at about 36 minutes.
+
+=item stat
+
+=item stat FH
+
+=item stat EXPR
+
+=item lstat
+
+=item lstat FH
+
+=item lstat EXPR
+
+As L<perlfunc/stat> or L<perlfunc/lstat>
+but with the access/modify/change file timestamps
+in subsecond resolution, if the operating system and the filesystem
+both support such timestamps.  To override the standard stat():
+
+    use Time::HiRes qw(stat);
+
+Test for the value of &Time::HiRes::d_hires_stat to find out whether
+the operating system supports subsecond file timestamps: a value
+larger than zero means yes. There are unfortunately no easy
+ways to find out whether the filesystem supports such timestamps.
+UNIX filesystems often do; NTFS does; FAT doesn't (FAT timestamp
+granularity is B<two> seconds).
+
+A zero return value of &Time::HiRes::d_hires_stat means that
+Time::HiRes::stat is a no-op passthrough for CORE::stat()
+(and likewise for lstat),
+and therefore the timestamps will stay integers.  The same
+thing will happen if the filesystem does not do subsecond timestamps,
+even if the &Time::HiRes::d_hires_stat is non-zero.
+
+In any case do not expect nanosecond resolution, or even a microsecond
+resolution.  Also note that the modify/access timestamps might have
+different resolutions, and that they need not be synchronized, e.g.
+if the operations are
+
+    write
+    stat # t1
+    read
+    stat # t2
+
+the access time stamp from t2 need not be greater-than the modify
+time stamp from t1: it may be equal or I<less>.
+
+=item utime LIST
+
+As L<perlfunc/utime>
+but with the ability to set the access/modify file timestamps
+in subsecond resolution, if the operating system and the filesystem,
+and the mount options of the filesystem, all support such timestamps.
+
+To override the standard utime():
+
+    use Time::HiRes qw(utime);
+
+Test for the value of &Time::HiRes::d_hires_utime to find out whether
+the operating system supports setting subsecond file timestamps.
+
+As with CORE::utime(), passing undef as both the atime and mtime will
+call the syscall with a NULL argument.
+
+The actual achievable subsecond resolution depends on the combination
+of the operating system and the filesystem.
+
+Modifying the timestamps may not be possible at all: for example, the
+C<noatime> filesystem mount option may prohibit you from changing the
+access time timestamp.
+
+Returns the number of files successfully changed.
+
+=back
+
+=head1 EXAMPLES
+
+  use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+
+  $microseconds = 750_000;
+  usleep($microseconds);
+
+  # signal alarm in 2.5s & every .1s thereafter
+  ualarm(2_500_000, 100_000);
+  # cancel that ualarm
+  ualarm(0);
+
+  # get seconds and microseconds since the epoch
+  ($s, $usec) = gettimeofday();
+
+  # measure elapsed time
+  # (could also do by subtracting 2 gettimeofday return values)
+  $t0 = [gettimeofday];
+  # do bunch of stuff here
+  $t1 = [gettimeofday];
+  # do more stuff here
+  $t0_t1 = tv_interval $t0, $t1;
+
+  $elapsed = tv_interval ($t0, [gettimeofday]);
+  $elapsed = tv_interval ($t0); # equivalent code
+
+  #
+  # replacements for time, alarm and sleep that know about
+  # floating seconds
+  #
+  use Time::HiRes;
+  $now_fractions = Time::HiRes::time;
+  Time::HiRes::sleep (2.5);
+  Time::HiRes::alarm (10.6666666);
+
+  use Time::HiRes qw ( time alarm sleep );
+  $now_fractions = time;
+  sleep (2.5);
+  alarm (10.6666666);
+
+  # Arm an interval timer to go off first at 10 seconds and
+  # after that every 2.5 seconds, in process virtual time
+
+  use Time::HiRes qw ( setitimer ITIMER_VIRTUAL time );
+
+  $SIG{VTALRM} = sub { print time, "\n" };
+  setitimer(ITIMER_VIRTUAL, 10, 2.5);
+
+  use Time::HiRes qw( clock_gettime clock_getres CLOCK_REALTIME );
+  # Read the POSIX high resolution timer.
+  my $high = clock_gettime(CLOCK_REALTIME);
+  # But how accurate we can be, really?
+  my $reso = clock_getres(CLOCK_REALTIME);
+
+  use Time::HiRes qw( clock_nanosleep TIMER_ABSTIME );
+  clock_nanosleep(CLOCK_REALTIME, 1e6);
+  clock_nanosleep(CLOCK_REALTIME, 2e9, TIMER_ABSTIME);
+
+  use Time::HiRes qw( clock );
+  my $clock0 = clock();
+  ... # Do something.
+  my $clock1 = clock();
+  my $clockd = $clock1 - $clock0;
+
+  use Time::HiRes qw( stat );
+  my ($atime, $mtime, $ctime) = (stat("istics"))[8, 9, 10];
+
+=head1 C API
+
+In addition to the perl API described above, a C API is available for
+extension writers.  The following C functions are available in the
+modglobal hash:
+
+  name             C prototype
+  ---------------  ----------------------
+  Time::NVtime     NV (*)()
+  Time::U2time     void (*)(pTHX_ UV ret[2])
+
+Both functions return equivalent information (like C<gettimeofday>)
+but with different representations.  The names C<NVtime> and C<U2time>
+were selected mainly because they are operating system independent.
+(C<gettimeofday> is Unix-centric, though some platforms like Win32 and
+VMS have emulations for it.)
+
+Here is an example of using C<NVtime> from C:
+
+  NV (*myNVtime)(); /* Returns -1 on failure. */
+  SV **svp = hv_fetchs(PL_modglobal, "Time::NVtime", 0);
+  if (!svp)         croak("Time::HiRes is required");
+  if (!SvIOK(*svp)) croak("Time::NVtime isn't a function pointer");
+  myNVtime = INT2PTR(NV(*)(), SvIV(*svp));
+  printf("The current time is: %" NVff "\n", (*myNVtime)());
+
+=head1 DIAGNOSTICS
+
+=head2 useconds or interval more than ...
+
+In ualarm() you tried to use number of microseconds or interval (also
+in microseconds) more than 1_000_000 and setitimer() is not available
+in your system to emulate that case.
+
+=head2 negative time not invented yet
+
+You tried to use a negative time argument.
+
+=head2 internal error: useconds < 0 (unsigned ... signed ...)
+
+Something went horribly wrong-- the number of microseconds that cannot
+become negative just became negative.  Maybe your compiler is broken?
+
+=head2 useconds or uinterval equal to or more than 1000000
+
+In some platforms it is not possible to get an alarm with subsecond
+resolution and later than one second.
+
+=head2 unimplemented in this platform
+
+Some calls simply aren't available, real or emulated, on every platform.
+
+=head1 CAVEATS
+
+Notice that the core C<time()> maybe rounding rather than truncating.
+What this means is that the core C<time()> may be reporting the time
+as one second later than C<gettimeofday()> and C<Time::HiRes::time()>.
+
+Adjusting the system clock (either manually or by services like ntp)
+may cause problems, especially for long running programs that assume
+a monotonously increasing time (note that all platforms do not adjust
+time as gracefully as UNIX ntp does).  For example in Win32 (and derived
+platforms like Cygwin and MinGW) the Time::HiRes::time() may temporarily
+drift off from the system clock (and the original time())  by up to 0.5
+seconds. Time::HiRes will notice this eventually and recalibrate.
+Note that since Time::HiRes 1.77 the clock_gettime(CLOCK_MONOTONIC)
+might help in this (in case your system supports CLOCK_MONOTONIC).
+
+Some systems have APIs but not implementations: for example QNX and Haiku
+have the interval timer APIs but not the functionality.
+
+In pre-Sierra macOS (pre-10.12, OS X) clock_getres(), clock_gettime()
+and clock_nanosleep() are emulated using the Mach timers; as a side
+effect of being emulated the CLOCK_REALTIME and CLOCK_MONOTONIC are
+the same timer.
+
+gnukfreebsd seems to have non-functional futimens() and utimensat()
+(at least as of 10.1): therefore the hires utime() does not work.
+
+=head1 SEE ALSO
+
+Perl modules L<BSD::Resource>, L<Time::TAI64>.
+
+Your system documentation for L<C<clock(3)>>, L<C<clock_gettime(2)>>,
+L<C<clock_getres(3)>>, L<C<clock_nanosleep(3)>>, L<C<clock_settime(2)>>,
+L<C<getitimer(2)>>, L<C<gettimeofday(2)>>, L<C<setitimer(2)>>, L<C<sleep(3)>>,
+L<C<stat(2)>>, L<C<ualarm(3)>>.
+
+=head1 AUTHORS
+
+D. Wegscheid <wegscd@whirlpool.com>
+R. Schertler <roderick@argon.org>
+J. Hietaniemi <jhi@iki.fi>
+G. Aas <gisle@aas.no>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 1996-2002 Douglas E. Wegscheid.  All rights reserved.
+
+Copyright (c) 2002, 2003, 2004, 2005, 2006, 2007, 2008 Jarkko Hietaniemi.
+All rights reserved.
+
+Copyright (C) 2011, 2012, 2013 Andrew Main (Zefram) <zefram@fysh.org>
+
+This program is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       y‰y^†•Y:8Dëe[Œ£	”)LµÆùpµ£¤û|3âË—q]ñ{¡&âb¤ˆiGïÊ(6÷é~ØÜÃî&#tbw…WI^›Œz£ª¶xƒÿÉíg·¼\ï)ƒnS*«Ç‰‰	„²ƒ~·æÜZÃã;ªùCë„ašÈÉš•ßk…Ëåq}1®kgQ+@#AÊÆ÷ªEÄ‹ˆ	"&“Y!i8¹ÕXşLÆsıUÑƒ¡†$©eByb 18Ïó{â³¼&£úìQO”$3MuuŠİÄxE!Ób¡»fí;2ÊëA¼ìÒ2ÇÃ¦x±_ß2£øİåüFòMo–Fœ‡à¬­2*§,1¢thhù„o"™e¡ÃK‡*9¼j!ñµ4kdd4ÉRJ–”ñ{Z”Ñ¼ğ¿¿ˆë&ß1†¸åMBfÚü¶E/"‰€¡½ÆÇİ	;š”÷âM1¬<}s‰wd`ÌñA ”Cıgy‰RXW’½±"¨~‡òğ\Cy™áùC³Jnª­4U•%•Ò4Ÿ[y¨ãƒ‹Y©S9jÂ·“¬½™‰%9¨×éo©ß‘X¿%¦áp¶*vˆ*v &r¤jİ yB/eBoE"ñ3L„¡>·ªÊl0˜´ZT}½ÙĞ Ë±÷zhÖ~Û<£hÔm×ù=ëîl6©d†Â|Cè¶áñmÃ“»P6€Hì$£v»Ø®'u©~–`ÈZ/¦†Ê;NæsA"i ìeÅø¡Õ‹{áy¥0+§x=y (Î«jİ}lñÌÅkømÊ(ùÎ±Ö8®6këk|U1¯‡æ*OWt°®0ßóá¹5‚ú®ËßX_xP[˜»g÷âCG¢UöÅŸ{E”|d ˜Ò-ñ~—’¼¡k¯âÍ'ıı-ué ¥:¹\*pƒ¼5/‘ ¿kÿÓ73†{Z¾'–î¯{¸§¾0Ww=§nÁ]XˆnÙ¨º¥#‰¡øñ¤÷©]JÜa²0ŠÙzjó³áÄu@\õ©å¶«Í3ŠHŸ"?àç*ÁŞÉ1+¥†G7nî]1Ü»j(¸
+Œ*7Ù0åø6"¸>mGîiÂE%‰‚z)Ì…_|Ç›ÓëN¿}Ê¬	Ç3 õ_P»Ò'åàgØíâCçA›Ç'«›L\s9ŞyÊï«6cË”¸”!Ó!ëŠ}ÌV
+‹˜Û]Ìí.âv+áyÄDû¾Jw‡=2JbzlĞÚcƒª×³¢ÖU
+X}ÒãüÓâÇ0Ş$wƒ1ÜnpÙ@­×òYU<üü¸+ÁÖ>~ß6öGÎ¸AWÃÙ"¸êˆD¤Iºğ‰$—Úc5ËÆÀ/ÁèXíê*£)<¨åè„ì%h£ÌGk»­ë
+5ı†ç^°¦SEBÂŒ>¾·ˆ&,É¨&YÉu/ˆêT‘ìñ4¶ëƒµÅ°;×ı­]–@Í¼B¹„¹'C %æ[ÂßFk5eœKÙ!}ÛíÎšNPÄ¢æİ¨ÎÏâp`ùeBÏÛk:Õ
+ ;‘_Çu‡,MtË_ıÕ‡XÀ¼ùõÓX|•Ğıvä×5<ô ¬Çt…À’D·
+.ŞÒP¤2Sã/ò|vîëy|ğšãƒÖœy|Ğşİ½~OôÍ÷ßïwëUÎgUğYy\ïm	şr¬ol^P…ÅŸÂ=ÊsNK"ãùyõğ:¿ì+¤À–ñ½µ£µ‘£@5“B+†}'tÂ_Mäp
+£6Â}[`´†Ï¨æ{äG~}wM'`ôu²Ûµğ¿—ÅwFF5JCñãËBè†Œ¢bec®ú²,±'” z3â+`èÌÿ²4±'a&Èü8Ï•-La’ƒĞÔMT½cÊï¨6óGáº¿¶êïp>€#ø¦÷£:Aa=‰ézyåÕXîŒ«+¿(Z×E.d?ë~eå¯“İE&Ä|¸¶3>‰épİË„ì«ş˜ÂÊÍÕ_FwÈÄ©ÌR>ûû5}ïr9y;ıso=|k›_^²ç´µ}.%{íIğ…Fÿbßù “™›à{‹ë*f°îE1¬«YùkZÖ­HÖ­Õ¬ÛkXÖO…ó½e\oÒŠ¼YĞçõ÷ßÔFøIl0xÊœJâ‚Qçj†QÈ'>jL>t™‡dÙ>ÑÖËÅ†üs†üó ı3¦Z|x~±ĞÖ§cL(1k#…l°éÖê¯Ğ°?\"ÎjğiLkæ%şjË¶,V±M Y4Š´·°Şß‰ĞÓ&H
+¬éËxl©‰Ì"gáÚŞcı'ùKôÉˆõ_¼®×kkg‚\îJ>3=·ÿP©€Q!`mCXáĞ°;$~:Œµ}.{Ç<6ş¶$ˆ³e6»pú©˜%`”çm¡0Iºk°Ntê{Ëƒ çDôëñL[”8ÕCí¢_[ÑÑ]È˜d
+ûL9&imÃÅƒ¡.ä«Ê ;÷fËØ˜I`G‰K‘Ì-Ä'.KëzÀã|Øÿ“§!¬y­ºœÈ
+Övº¿¶³mxû«Í%K“²N®Ø®7+v„×oLKøì£I>9Dã~"ÉXÔ¦2v%ø©S™
+óÜ6ÿ3Ûıå&øYqşš&Fá2Ø0ƒíçã57„³~G8“Ö’R~á€MmbÔë-£6BFã{ÃVhñ¡ßZE£ŒëûRRAnÉ§ä¨áÀèİsƒÎ$®6IªMuZ#7Ú9>ûWO¥Í÷ªeø"¾»”ßSÈ‘¤N‰FYàBT$¿Ã7aşµ£ˆˆëäF=$.âD°£ğ{m“oÊ¡~)‡úßŞä£LafÄû¸dA“»_Âú¦'ØHèÛÅ™Àô¾­E‚QI*xÆ¶İñ½6yB `×jõ•
+8®|8.ˆH2j’Ô ½tÈX‰Á!•íK8ÍÔ]ì„ÅÅÑœÖ=9ÜPrEWtP}v5ôí¨Ñ:ª:4£ĞÊ@7Y!`Å@,n$Á%şÊSX`G_9Ğ…‚şºãƒ"N~”ÊÙàgëì‹øÅüçñ¬Ñ¼"'xÊˆñ&2ç"¶ZvpTk‡*cú«bØ
+B”±¬“ğ%v!å
+P8by’[I¢Ã@{ÚŒœÖÅL¾CÙ(Û1†r",½Ì †ò[äÈ¥¾òQY+õ//Hˆ—‘PâS½Ø¾“¡şöTÇe*ìöìà7#¾Ä^	ô$ú[n²TöíÈ¯A€Ú#>'#!`Cnß¸ãAÙ‚7$ùñ9dŸÉ*ˆ	)¼á±ø¿pj6¶F|OğJHàœHüu’{i">;@ÙÔŒ òÃèÎ÷¢¨şÎC¸ïM®²ş} ß:’™"‰Ğ³¾ìòmÂ+° õÏO7Óçg›y™s0>´ÍeT‘ì=}hÓ¯ëZL|¡º2ÙŠ¬šç´=í
+½N¢(™'½7$ìß¸oS@FR ô¨ìçç[DZGÒ‚R65/0É°‹3¹´ˆĞ=Ïü
+V(›EÆ©åãÊËøîĞtØnEAë‘á/Ëîë ~€ 5²$|å‘9fC½Ù¨7H^e%ÒÁø!i‰Q#1tŠ½“mßé`+2WE1]ĞLØojguè¶è$ÀÈ( Z("Å©8ßùJ²wÂº ĞM®—\UgŒ‚Ó–¸º8®ÛÃµØC§l²1|!JaÇ³J“ˆŒ¡Wã„{H‡xaªƒš=	ß½áõ]° &u,#H–Õ§#M÷Õæá­fİ³S‡²—­Èò§¶³:vŸ©IXC6ëNU©èÎƒT”ñ:¤°âÓ˜²I:t³¡e€³	µü¶ìÍàWFM“ªZ–ÙKšág{Z@ŞÁ×W`7¿)²í
+)¢“J3ÚF²+ˆ²éO‘˜¸»F	$…÷Ö·y7Ö—Ó=²•÷½(KÎŸÅvmÃ¶øk¨¼ga4«·4+P*d£Món(¿Ñh4 ©ĞÖ[Gğ.€uø…Öà¹£ïÑ¾útíh_úyH^Sslu3$iLCùğFyˆQRY>òÇ%Ùà%ƒ ÏTàĞgzoIªÓ+¡«dRU× [’ÔI’ÜY–İß ¬lÄ³Í®HìY’Ø¼&±€ù*¡g%›~è¼JÀÀ»QîEu²M³ıE3úG‰è3}m:”ÍeS»ÉT4«Ge!&uh*·_Ş¹!ª‹}Ä<l­ä¹“”´•Àg5*«Ìõšº{Ûõ%W4W’5cµ7ÓñÕÕ¥÷_\òWˆù:ÙíÈâ¿@Á‚Ş]Ó	Ö«ù%‰=K“z6ïõşÑ¢ı£´U$»A'ıÒ
+œœ ²nD|	fIÊgèîT×ŒzşdÄ½›ßNïoªÕ¿øæe\‹Ë¿xİ¦€÷ú=’W8Å2¼JNñ4é+òåÛCáâ©á{¼áb×í;éŸ€O—ÊŸŞ["E3ú
+j½šçQšØzBğ·<É`•ğõ‹+F,œß«OŸMYL²Cù°jŒ–+öı„mıÑà’j.'j¯rë_]Ò¿)¨q^{%I–L"Hø ;6:njÑŒş	Ò^
+6kFµ¡?O
+WŒ2IBt%¼¶7Zø òş)AOIr8£¼î„KÚåšG÷GˆfôOl³§Q<Ê¬ÕÔŒ2ËC`E±Û×:¡¸m%á÷ l!A$vÛ¡_OüÚÄéà¢ı¬êXI<Ê¤
+5‰Gj.K„íàùÁ!È£XW>ÑŒş‚>Ÿ!Ûè©Üï/Ûâ%á‘3¹¢Ñ"D3ú§	0E:ymÙIú$E3J«£‹f”VGÍ(­.šQZ]4£´:ºhFiutÑŒÒêè¢¥ÕÑE3J«£‹f”VGÍ(­.šQZ]4£´:ºhFiutÑŒÒêè¢¥ÕÑE3J«£‹f”VGÍ(­.šQZ]4£´:ºhFiutÑŒÒêè¢¥ÕÑE3J«£‹f”VGÍ(­.šQZ]4£´:ºhFiutÑŒÒêè¢¥ÕÑE3J«£‹f”VGÍ(­.šQZ[©¬ÿ›püàP\Œ6    IEND®B`‚
